@@ -1,6 +1,18 @@
+# SwiftPM / build
 .build/
 build/
-.DS_Store
-*.xcodeproj
 .swiftpm/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Local notes
 PLAN.md

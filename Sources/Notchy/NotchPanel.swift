@@ -28,7 +28,14 @@ final class NotchPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    // MARK: - Positioning (right edge of the zero screen, vertically centered)
+    // MARK: - Positioning (right edge, near the top-right corner)
+
+    /// Gap between the bottom of the menu bar and the top of the *expanded*
+    /// island. The panel is always expanded-sized and the tab is centered in
+    /// it, so this is measured against the panel frame, not the drawn sliver —
+    /// that keeps the island's top edge parked at the same place whether it's
+    /// collapsed or open, and it grows symmetrically from there on hover.
+    static let topGap: CGFloat = 98
 
     func positionOnScreen() {
         // NSScreen.main is key-window-based and nullable — unreliable for an
@@ -36,7 +43,13 @@ final class NotchPanel: NSPanel {
         guard let screen = NSScreen.screens.first ?? NSScreen.main else { return }
         let size = frame.size
         let x = screen.frame.maxX - size.width
-        let y = screen.frame.midY - size.height / 2
+
+        // visibleFrame.maxY sits just under the menu bar (and under the notch
+        // safe area on notched displays), so the gap reads the same on every Mac.
+        let top = screen.visibleFrame.maxY - Self.topGap
+        // Never let it run off the bottom on short screens.
+        let y = max(screen.frame.minY + 8, top - size.height)
+
         setFrameOrigin(NSPoint(x: x, y: y))
         orderFrontRegardless()
     }
