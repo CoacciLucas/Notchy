@@ -20,15 +20,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mock registry behind a debug flag (UI was built against mocks).
         let mock = ProcessInfo.processInfo.environment["NOTCHY_MOCK"] == "1"
         let providers: [UsageProvider] = mock
-            ? [MockProvider(info: ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "sparkles"), session: 0.73, weekly: 0.41),
-               MockProvider(info: ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "terminal"), session: nil, weekly: 0.38),
-               MockProvider(info: ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "bolt"), session: 1.0, weekly: 0.62)]
+            ? [MockProvider(info: ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "asterisk"), session: 0.73, weekly: 0.41),
+               MockProvider(info: ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "circle.hexagongrid"), session: nil, weekly: 0.38),
+               MockProvider(info: ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "snowflake"), session: 1.0, weekly: 0.62)]
             : [ClaudeProvider(), CodexProvider(), GLMProvider()]
 
         let store = UsageStore(providers: providers)
-        let panel = NotchPanel(contentSize: NotchPanel.notchSize(providerCount: providers.count))
-        panel.contentView = PassthroughHostingView(
-            rootView: NotchContentView().environmentObject(store))
+        let notch = NotchState()
+        let panel = NotchPanel(contentSize: NotchMetrics.expandedSize(providers.count))
+        let host = PassthroughHostingView(
+            rootView: NotchContentView().environmentObject(store).environmentObject(notch))
+        host.state = notch
+        panel.contentView = host
         panel.positionOnScreen()
         panel.observeScreenChanges()
 

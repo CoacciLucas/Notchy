@@ -9,7 +9,6 @@ import SwiftUI
 final class PopoverController: ObservableObject {
     @Published var visibleProviderID: String?
     @Published var pinned = false
-    var slotFrames: [String: CGRect] = [:]
     weak var store: UsageStore?
 
     private var panel: PopoverPanel?
@@ -70,27 +69,27 @@ final class PopoverController: ObservableObject {
             installMonitors()
             return p
         }()
-        guard let notch = notchPanel, let slot = slotFrames[id] else { return }
+        guard let notch = notchPanel, let store,
+              let index = store.snapshots.firstIndex(where: { $0.id == id }) else { return }
 
-        // SwiftUI .global on macOS is window-local, top-left origin, y-down —
-        // convert to AppKit screen coords (bottom-left, y-up).
-        let slotMinX = notch.frame.minX + slot.minX
-        let slotMidY = notch.frame.maxY - slot.minY - slot.height / 2
+        let content = DetailPopoverView(providerID: id)
+            .environmentObject(store)
+            .environmentObject(self)
+            .onHover { hovering in self.popoverHover(hovering) }
+        let host = NSHostingView(rootView: content)
+        let size = host.fittingSize   // width is fixed by the view; height fits the content
 
-        let size = NSSize(width: 280, height: 230)
-        // Right edge ~8 pt left of the notch, vertically aligned to the slot.
-        let x = slotMinX - 8 - size.width
+        // Slot centres are pure geometry (NotchMetrics) — no need to round-trip
+        // frames back out of SwiftUI, and it stays right mid-animation.
+        let flare = NotchMetrics.flare(width: NotchMetrics.expandedWidth)
+        let slotMidY = notch.frame.maxY - flare - (CGFloat(index) + 0.5) * NotchMetrics.slotHeight
+        let x = notch.frame.maxX - NotchMetrics.expandedWidth - 4 - size.width
         let y = slotMidY - size.height / 2
         // Clamp to the screen vertically; the notch is at the right edge so x is fine.
         let screen = NSScreen.screens.first?.frame ?? .zero
         let clampedY = min(max(y, screen.minY + 8), screen.maxY - size.height - 8)
         panel.setFrame(NSRect(origin: NSPoint(x: x, y: clampedY), size: size), display: false)
-
-        let content = DetailPopoverView(providerID: id)
-            .environmentObject(store!)
-            .environmentObject(self)
-            .onHover { hovering in self.popoverHover(hovering) }
-        panel.contentView = NSHostingView(rootView: content)
+        panel.contentView = host
 
         visibleProviderID = id
         self.pinned = pinned
@@ -196,34 +195,36 @@ struct DetailPopoverView: View {
     let providerID: String
     @EnvironmentObject var store: UsageStore
 
+    private static let bubbleWidth: CGFloat = 250
+    private static let beakWidth: CGFloat = 9
+
     var body: some View {
         TimelineView(.everyMinute) { _ in
             content
-                .padding(16)
-                .frame(width: 280, height: 230, alignment: .topLeading)
-                .background(.black)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .frame(width: Self.bubbleWidth, alignment: .topLeading)
+                .background(Color.black, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1))
                 .overlay(alignment: .trailing) {
-                    // Arrow pointing right, at the slot icon.
+                    // Beak pointing right, at the slot icon.
                     ArrowShape()
                         .fill(Color.black)
-                        .frame(width: 10, height: 16)
-                        .offset(x: 5)
+                        .frame(width: Self.beakWidth, height: 32)
+                        .offset(x: Self.beakWidth - 0.5)
                         .accessibilityHidden(true)
                 }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                )
+                .padding(.trailing, Self.beakWidth)   // the beak lives in this gutter
         }
     }
 
     private var content: some View {
         Group {
             if let snap = store.snapshots.first(where: { $0.info.id == providerID }) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     header(snap)
-                    windowBlock(title: "5-hour session", window: snap.usage?.session,
+                    windowBlock(title: "Current session", window: snap.usage?.session,
                                 missingText: "No 5-hour limit published", tint: tint(snap))
                     windowBlock(title: "Weekly limit", window: snap.usage?.weekly,
                                 missingText: "No weekly limit published", tint: tint(snap))
@@ -231,6 +232,15 @@ struct DetailPopoverView: View {
                         Label(warning, systemImage: "exclamationmark.triangle")
                             .font(.system(size: 10))
                             .foregroundStyle(.white.opacity(0.5))
+                    }
+                    HStack {
+                        Spacer()
+                        // The only way to quit an LSUIElement app — without
+                        // this there's no Dock icon or menu to quit from.
+                        Button("Quit Notchy") { NSApp.terminate(nil) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.35))
                     }
                 }
             } else {
@@ -240,46 +250,38 @@ struct DetailPopoverView: View {
     }
 
     private func header(_ snap: ProviderSnapshot) -> some View {
-        HStack {
+        HStack(spacing: 7) {
             Image(systemName: snap.info.symbol)
-                .foregroundStyle(tint(snap))
-            Text(snap.info.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-            Spacer()
-            if case .stale(let since) = snap.state {
-                Text("stale since \(since.formatted(date: .omitted, time: .shortened))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+            Text("\(snap.info.name) Usage")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
         }
     }
 
     private func windowBlock(title: String, window: UsageWindow?, missingText: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(title).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
-                Spacer()
-                if let window {
-                    Text("\(Int((window.percent * 100).rounded()))%")
-                        .font(.system(size: 11)).monospacedDigit().foregroundStyle(.white)
-                    if let used = window.used, let limit = window.limit, let unit = window.unit {
-                        Text("\(unit)\(used, specifier: "%.2f") / \(unit)\(limit, specifier: "%.0f")")
-                            .font(.system(size: 10)).monospacedDigit()
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 12)).foregroundStyle(.white)
+                Spacer(minLength: 0)
+                if let reset = window?.resetsAt {
+                    Text(resetText(reset))
+                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
                 }
             }
             if let window {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.15))
+                        Capsule().fill(Color.white.opacity(0.22))
                         Capsule().fill(window.percent >= 1 ? Color.red : tint)
-                            .frame(width: geo.size.width * window.percent)
+                            .frame(width: max(5, geo.size.width * window.percent))
                     }
                 }
-                .frame(height: 6)
-                if let reset = window.resetsAt {
-                    Text(resetText(reset)).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
-                }
+                .frame(height: 5)
+                Text(usedText(window))
+                    .font(.system(size: 11)).monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.55))
             } else {
                 Text(missingText).font(.system(size: 11)).foregroundStyle(.white.opacity(0.35))
             }
@@ -287,10 +289,18 @@ struct DetailPopoverView: View {
         .animation(.easeOut(duration: 0.3), value: window?.percent)
     }
 
+    private func usedText(_ window: UsageWindow) -> String {
+        let pct = "\(Int((window.percent * 100).rounded()))% Used"
+        guard let used = window.used, let limit = window.limit, let unit = window.unit else { return pct }
+        return pct + String(format: "  ·  %@%.2f / %@%.0f", unit, used, unit, limit)
+    }
+
     private func resetText(_ reset: Date) -> String {
-        if let left = UsageMath.countdown(until: reset) {
-            return "Resets in \(left)"
+        // Beyond a day a countdown is useless — name the day, like the menu bar clock.
+        if reset.timeIntervalSinceNow > 24 * 3600 {
+            return "Resets \(reset.formatted(.dateTime.weekday(.abbreviated).hour().minute()))"
         }
+        if let left = UsageMath.countdown(until: reset) { return "Resets in \(left)" }
         return "Resetting…"   // deadline passed; refresh fires via UsageStore
     }
 
@@ -311,8 +321,10 @@ struct ArrowShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.midY),
+                       control: CGPoint(x: rect.minX + rect.width * 0.4, y: rect.minY + rect.height * 0.22))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY),
+                       control: CGPoint(x: rect.minX + rect.width * 0.4, y: rect.maxY - rect.height * 0.22))
         p.closeSubpath()
         return p
     }

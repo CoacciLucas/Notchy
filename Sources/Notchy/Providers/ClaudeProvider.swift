@@ -5,33 +5,31 @@ import Security
 /// Claude Code OAuth token from Keychain item "Claude Code-credentials".
 /// Fallback: ~/.claude.json → cachedUsageUtilization (refreshed by the CLI).
 final class ClaudeProvider: UsageProvider {
-    let info = ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "sparkles")
+    let info = ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "asterisk")
     let refresh: RefreshPolicy = .poll(.seconds(300))   // ≥ 5 min — endpoint 429s aggressively
     var watchPaths: [String] {
         [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json").path]
     }
 
     private let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-    private let tokenURL = URL(string: "https://console.anthropic.com/v1/oauth/token")!
-    // Claude Code's public OAuth client id (same one the CLI itself uses).
-    private let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
     // In-memory token cache: one Keychain read per launch (read-prompt loops, §1.1).
-    private var cachedToken: (accessToken: String, refreshToken: String, expiresAt: Date?)?
-    private let keychain = Keychain()
+    private var cachedToken: (accessToken: String, expiresAt: Date?)?
 
     func currentUsage() async throws -> ProviderUsage {
-        let tok = try await token(forceRefresh: false)
+        let tok = try await token()
         do {
             return try await fetchUsage(accessToken: tok.accessToken)
         } catch HTTPError.unauthorized {
-            // CLI may have refreshed and rewritten the blob since launch → re-read once.
+            // The CLI refreshes and rewrites the Keychain blob as the user uses
+            // Claude Code — re-read it once before giving up.
+            // NEVER run the OAuth refresh flow ourselves: writing the secret
+            // from this unsigned binary rewrites the item's ACL and makes the
+            // CLI prompt for the login password on every token read.
             cachedToken = nil
-            let fresh = try await token(forceRefresh: false)
-            if fresh.accessToken == tok.accessToken {
-                // Same token really is rejected → run the refresh flow ourselves.
-                let t = try await token(forceRefresh: true)
-                return try await fetchUsage(accessToken: t.accessToken)
+            let fresh = try await token()
+            guard fresh.accessToken != tok.accessToken else {
+                throw HTTPError.unauthorized   // → .noData with re-auth guidance
             }
             return try await fetchUsage(accessToken: fresh.accessToken)
         }
@@ -49,49 +47,20 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Token handling
 
-    private func token(forceRefresh: Bool) async throws -> (accessToken: String, refreshToken: String, expiresAt: Date?) {
-        if !forceRefresh, let cachedToken, let exp = cachedToken.expiresAt, exp > Date() {
-            return cachedToken
-        }
-        var blob = try readKeychainBlob()
-        var oauth = blob["claudeAiOauth"] as? [String: Any] ?? [:]
-        if !forceRefresh,
-           let access = oauth["accessToken"] as? String, !access.isEmpty,
-           let expStr = oauth["expiresAt"] as? String,
-           let exp = ISO8601DateFormatter().date(from: expStr), exp > Date() {
-            let t = (access, oauth["refreshToken"] as? String ?? "", exp)
-            cachedToken = t
-            return t
-        }
-        // Refresh flow; write the new blob back so the CLI stays in sync.
-        guard let refreshTok = oauth["refreshToken"] as? String, !refreshTok.isEmpty else {
+    /// Read the token the CLI maintains. Read-only — this app never writes the
+    /// Keychain item (a write from an unsigned binary rewrites its ACL and
+    /// makes the CLI prompt for the login password on every token read).
+    /// An expired token is still returned: the usage endpoint decides if it
+    /// works, and a 401 falls back to one re-read (the CLI may have refreshed).
+    private func token() throws -> (accessToken: String, expiresAt: Date?) {
+        if let cachedToken { return cachedToken }
+        let blob = try readKeychainBlob()
+        let oauth = blob["claudeAiOauth"] as? [String: Any] ?? [:]
+        guard let access = oauth["accessToken"] as? String, !access.isEmpty else {
             throw HTTPError.unauthorized
         }
-        var req = URLRequest(url: tokenURL, timeoutInterval: 20)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "grant_type": "refresh_token",
-            "refresh_token": refreshTok,
-            "client_id": clientID,
-        ])
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-            throw HTTPError.unauthorized
-        }
-        guard let new = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let access = new["access_token"] as? String else {
-            throw HTTPError.unauthorized
-        }
-        oauth["accessToken"] = access
-        if let rt = new["refresh_token"] as? String { oauth["refreshToken"] = rt }
-        if let expIn = new["expires_in"] as? Double {
-            oauth["expiresAt"] = ISO8601DateFormatter().string(from: Date().addingTimeInterval(expIn))
-        }
-        blob["claudeAiOauth"] = oauth
-        try keychain.write(blob: blob)
-        let exp = (oauth["expiresAt"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
-        let t = (access, oauth["refreshToken"] as? String ?? "", exp)
+        let exp = (oauth["expiresAt"] as? String).flatMap(Self.parseISO)
+        let t = (access, exp)
         cachedToken = t
         return t
     }
@@ -153,21 +122,4 @@ func anyDouble(_ v: Any?) -> Double? {
     if let n = v as? NSNumber { return n.doubleValue }
     if let s = v as? String { return Double(s) }
     return nil
-}
-
-/// Keychain read/write for the "Claude Code-credentials" generic-password blob.
-struct Keychain {
-    private let service = "Claude Code-credentials"
-
-    func write(blob: [String: Any]) throws {
-        let data = try JSONSerialization.data(withJSONObject: blob)
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-        ]
-        var update = base
-        update[kSecValueData as String] = data
-        let status = SecItemUpdate(base as CFDictionary, update as CFDictionary)
-        guard status == errSecSuccess else { throw HTTPError.unauthorized }
-    }
 }

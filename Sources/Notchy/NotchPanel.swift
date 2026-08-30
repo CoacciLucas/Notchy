@@ -4,10 +4,10 @@ import SwiftUI
 /// The side-notch overlay panel. Property recipe verified against the macOS 26
 /// SDK and boring.notch's shipped configuration (PLAN §2.2).
 final class NotchPanel: NSPanel {
-    init(contentSize: NSSize) {
+    init(contentSize: CGSize) {
         // styleMask at init — changing it later doesn't update WindowServer's
         // activation tag (FB16484811).
-        super.init(contentRect: NSRect(x: 0, y: 0, width: contentSize.width, height: contentSize.height),
+        super.init(contentRect: NSRect(origin: .zero, size: contentSize),
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         level = .statusBar
@@ -18,6 +18,9 @@ final class NotchPanel: NSPanel {
         isFloatingPanel = true
         hidesOnDeactivate = false
         isMovable = false
+        // Hover has to work while another app is frontmost — this is what keeps
+        // mouse-moved events flowing to a non-activating panel.
+        acceptsMouseMovedEvents = true
     }
 
     // Never key/main: a key non-activating panel steals keystrokes from
@@ -26,10 +29,6 @@ final class NotchPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     // MARK: - Positioning (right edge of the zero screen, vertically centered)
-
-    static func notchSize(providerCount: Int) -> NSSize {
-        NSSize(width: 36, height: CGFloat(providerCount) * 56 + 16)
-    }
 
     func positionOnScreen() {
         // NSScreen.main is key-window-based and nullable — unreliable for an
@@ -54,29 +53,19 @@ final class NotchPanel: NSPanel {
     }
 }
 
-/// Click-through outside the notch shape: returns nil so events fall through
-/// to whatever is behind. (Never set ignoresMouseEvents — kills per-pixel
-/// pass-through entirely.)
+/// Click-through outside the drawn tab: returns nil so events fall through to
+/// whatever is behind. (Never set ignoresMouseEvents — kills per-pixel
+/// pass-through entirely.) The panel stays expanded-sized at all times, so the
+/// live tab size comes from NotchState.
 final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard bounds.contains(point) else { return nil }
-        return Self.tabHitPath(in: bounds).contains(point) ? super.hitTest(point) : nil
-    }
+    var state: NotchState?
 
-    /// Match the drawn tab: 18 pt radius on the leading (screen-facing) corners
-    /// only, flat trailing edge flush against the screen edge.
-    static func tabHitPath(in rect: CGRect) -> NSBezierPath {
-        let r: CGFloat = 18
-        let p = NSBezierPath()
-        p.move(to: NSPoint(x: rect.maxX, y: rect.minY))                       // trailing bottom
-        p.line(to: NSPoint(x: rect.minX + r, y: rect.minY))                   // bottom edge
-        p.appendArc(from: NSPoint(x: rect.minX + r, y: rect.minY),
-                    to: NSPoint(x: rect.minX, y: rect.minY + r), radius: r)   // bottom-leading
-        p.line(to: NSPoint(x: rect.minX, y: rect.maxY - r))                   // leading edge
-        p.appendArc(from: NSPoint(x: rect.minX, y: rect.maxY - r),
-                    to: NSPoint(x: rect.minX + r, y: rect.maxY), radius: r)   // top-leading
-        p.line(to: NSPoint(x: rect.maxX, y: rect.maxY))                       // top edge
-        p.close()
-        return p
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let size = state?.visibleSize, size.width > 0 else { return nil }
+        // Tab is trailing-aligned and vertically centered; NotchShape is
+        // symmetric, so AppKit's y-up bounds need no flip.
+        let rect = CGRect(x: bounds.maxX - size.width, y: bounds.midY - size.height / 2,
+                          width: size.width, height: size.height)
+        return NotchShape.cgPath(in: rect).contains(point) ? super.hitTest(point) : nil
     }
 }

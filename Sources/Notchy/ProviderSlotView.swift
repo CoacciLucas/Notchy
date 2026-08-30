@@ -21,14 +21,14 @@ struct ProviderSlotView: View {
             return false
         }()
 
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 3.5)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 3)
                     .accessibilityHidden(true)
                 Circle()
                     .trim(from: 0, to: max(pct, hasData ? 0.005 : 0))
-                    .stroke(arcColor, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                    .stroke(arcColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .rotationEffect(.degrees(-90))   // from 12 o'clock, clockwise
                     .accessibilityHidden(true)
                     .animation(.easeOut(duration: 0.3), value: pct)
@@ -38,11 +38,12 @@ struct ProviderSlotView: View {
             }
             .frame(width: 30, height: 30)
             Text(UsageMath.ringLabel(percent: pct, isWeeklyFallback: isWeekly, hasData: hasData))
-                .font(.system(size: 9, weight: .medium))
+                .font(.system(size: 10, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.white)
+                .fixedSize()
         }
-        .frame(width: 36, height: 56)
+        .frame(width: NotchMetrics.expandedWidth, height: NotchMetrics.slotHeight)
         .opacity(dimmed ? 0.4 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(snapshot.info.name)

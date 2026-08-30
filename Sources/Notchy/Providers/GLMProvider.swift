@@ -4,7 +4,7 @@ import Foundation
 /// GET api.z.ai/api/monitor/usage/quota/limit with the opencode API key.
 /// Percentage-only (no absolute credits) — approved display (§4.4 Q10).
 final class GLMProvider: UsageProvider {
-    let info = ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "bolt")
+    let info = ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "snowflake")
     let refresh: RefreshPolicy = .poll(.seconds(150))
     var watchPaths: [String] { [keyPath.path] }   // credential change → next local read picks it up
 
