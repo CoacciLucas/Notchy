@@ -1,7 +1,7 @@
 # Notchy
 
 A macOS side-notch widget pinned to the right screen edge showing AI coding
-usage limits (Claude, Codex, GLM). See [PLAN.md](PLAN.md) for the full spec.
+usage limits (Claude, Codex, GLM).
 
 ## Build & run
 
