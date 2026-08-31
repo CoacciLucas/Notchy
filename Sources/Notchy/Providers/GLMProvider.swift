@@ -4,7 +4,7 @@ import Foundation
 /// GET api.z.ai/api/monitor/usage/quota/limit with the opencode API key.
 /// Percentage-only (no absolute credits) — approved display (§4.4 Q10).
 final class GLMProvider: UsageProvider {
-    let info = ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "snowflake")
+    let info = ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "zai")
     let refresh: RefreshPolicy = .poll(.seconds(150))
     var watchPaths: [String] { [keyPath.path] }   // credential change → next local read picks it up
 
@@ -28,7 +28,7 @@ final class GLMProvider: UsageProvider {
 
     private func readKey() throws -> String? {
         if let cachedKey { return cachedKey }
-        // ponytail: no negative cache — re-reads a tiny file per poll (~2.5 min),
+        // No negative cache — re-reads a tiny file per poll (~2.5 min),
         // so a key added after launch gets picked up without a relaunch
         guard let data = try? Data(contentsOf: keyPath),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

@@ -11,6 +11,8 @@ APP=build/Notchy.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp .build/release/Notchy "$APP/Contents/MacOS/Notchy"
+mkdir -p "$APP/Contents/Resources"
+cp -R .build/release/Notchy_Notchy.bundle "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -26,4 +28,15 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 </dict>
 </plist>
 EOF
+# Sign with a stable identity. Ad-hoc signing (the SwiftPM default) puts a
+# per-build cdhash in the Keychain item's ACL, so "Always Allow" is invalidated
+# by every rebuild and macOS re-prompts for the login password.
+IDENTITY="${NOTCHY_SIGN_IDENTITY:-Notchy Self-Signed}"
+if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
+    codesign --force --sign "$IDENTITY" "$APP"
+else
+    echo "WARN: no '$IDENTITY' signing identity — see README; the Keychain" >&2
+    echo "      will re-prompt after every rebuild." >&2
+fi
+
 echo "Built $APP"

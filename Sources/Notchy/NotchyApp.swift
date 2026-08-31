@@ -20,9 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Mock registry behind a debug flag (UI was built against mocks).
         let mock = ProcessInfo.processInfo.environment["NOTCHY_MOCK"] == "1"
         let providers: [UsageProvider] = mock
-            ? [MockProvider(info: ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "asterisk"), session: 0.73, weekly: 0.41),
-               MockProvider(info: ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "circle.hexagongrid"), session: nil, weekly: 0.38),
-               MockProvider(info: ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "snowflake"), session: 1.0, weekly: 0.62)]
+            ? [MockProvider(info: ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "claude"), session: 0.73, weekly: 0.41),
+               MockProvider(info: ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "openai"), session: nil, weekly: 0.38),
+               MockProvider(info: ProviderInfo(id: "glm", name: "GLM", tintHex: "#2E66FF", symbol: "zai"), session: 1.0, weekly: 0.62)]
             : [ClaudeProvider(), CodexProvider(), GLMProvider()]
 
         let store = UsageStore(providers: providers)

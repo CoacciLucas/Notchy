@@ -27,7 +27,7 @@ func fetchJSON(_ url: URL, headers: [String: String], timeout: TimeInterval = 20
     case 401: throw HTTPError.unauthorized
     default: throw HTTPError.status(http.statusCode)
     }
-    // ponytail: [String:Any] not Codable — schemas are undocumented and churn;
+    // [String:Any] not Codable — schemas are undocumented and churn;
     // tolerant key-probing beats recompiling Decodables on every change
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 }

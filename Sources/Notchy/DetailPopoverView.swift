@@ -251,9 +251,7 @@ struct DetailPopoverView: View {
 
     private func header(_ snap: ProviderSnapshot) -> some View {
         HStack(spacing: 7) {
-            Image(systemName: snap.info.symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
+            ProviderIcon(name: snap.info.symbol, size: 15)
             Text("\(snap.info.name) Usage")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)

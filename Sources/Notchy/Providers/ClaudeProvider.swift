@@ -41,7 +41,7 @@ final class ClaudeProvider: UsageProvider {
         guard let data = try? Data(contentsOf: url),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let cached = root["cachedUsageUtilization"] as? [String: Any],
-              let util = cached["utilization"] as? [String: Any] else { return nil }
+              let util = Self.unwrap(cached) else { return nil }
         return Self.parse(utilization: util)
     }
 
@@ -85,10 +85,17 @@ final class ClaudeProvider: UsageProvider {
             "Authorization": "Bearer \(accessToken)",
             "anthropic-beta": "oauth-2025-04-20",
         ])
-        guard let usage = json["usage"] as? [String: Any] ?? json["utilization"] as? [String: Any] else {
-            throw HTTPError.status(-2)
-        }
+        guard let usage = Self.unwrap(json) else { throw HTTPError.status(-2) }
         return Self.parse(utilization: usage)
+    }
+
+    /// The endpoint returns the windows at the top level; the cached file nests
+    /// them under "utilization" (and an older endpoint shape used "usage").
+    static func unwrap(_ json: [String: Any]) -> [String: Any]? {
+        for candidate in [json["usage"] as? [String: Any], json["utilization"] as? [String: Any], json] {
+            if let c = candidate, c["five_hour"] != nil || c["seven_day"] != nil { return c }
+        }
+        return nil
     }
 
     /// Endpoint and cachedUsageUtilization share this shape (verified locally):

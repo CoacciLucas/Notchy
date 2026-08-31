@@ -32,9 +32,7 @@ struct ProviderSlotView: View {
                     .rotationEffect(.degrees(-90))   // from 12 o'clock, clockwise
                     .accessibilityHidden(true)
                     .animation(.easeOut(duration: 0.3), value: pct)
-                Image(systemName: snapshot.info.symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
+                ProviderIcon(name: snapshot.info.symbol, size: 14)
             }
             .frame(width: 30, height: 30)
             Text(UsageMath.ringLabel(percent: pct, isWeeklyFallback: isWeekly, hasData: hasData))

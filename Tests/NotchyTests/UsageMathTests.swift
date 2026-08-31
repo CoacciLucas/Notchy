@@ -60,6 +60,16 @@ final class UsageMathTests: XCTestCase {
         XCTAssertNil(ClaudeProvider.parseISO("not a date"))
     }
 
+    func testClaudeUnwrapShapes() {
+        let windows: [String: Any] = ["five_hour": ["utilization": 52.0], "seven_day": ["utilization": 29.0]]
+        // Live endpoint: windows at the top level.
+        XCTAssertEqual(ClaudeProvider.parse(utilization: ClaudeProvider.unwrap(windows)!).session?.percent, 0.52)
+        // Cached file / older endpoint shapes: nested.
+        XCTAssertEqual(ClaudeProvider.parse(utilization: ClaudeProvider.unwrap(["utilization": windows])!).weekly?.percent, 0.29)
+        XCTAssertEqual(ClaudeProvider.parse(utilization: ClaudeProvider.unwrap(["usage": windows])!).weekly?.percent, 0.29)
+        XCTAssertNil(ClaudeProvider.unwrap(["error": "nope"]))
+    }
+
     // MARK: - Countdown formatting
 
     func testCountdownFormatting() {

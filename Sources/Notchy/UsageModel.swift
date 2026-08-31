@@ -19,7 +19,7 @@ struct ProviderInfo: Identifiable, Hashable {
     let id: String
     let name: String
     let tintHex: String        // brand tint, e.g. "#D97757"
-    let symbol: String         // SF Symbol name (MVP placeholder art)
+    let symbol: String         // brand logo: Resources/<symbol>.svg
 }
 
 enum LoadState: Equatable {
@@ -59,7 +59,7 @@ enum UsageMath {
     static func codexWindowKind(seconds: Int) -> WindowKind? {
         switch seconds {
         case 17_000...19_000: return .session
-        case 600_000...6_100_000: return .weekly  // ponytail: loose band around 604800 for clock-drifty values
+        case 600_000...6_100_000: return .weekly  // Loose band around 604800 for clock-drifty values
         default: return nil
         }
     }

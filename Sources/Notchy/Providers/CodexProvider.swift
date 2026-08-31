@@ -4,7 +4,7 @@ import Foundation
 /// ChatGPT OAuth token from ~/.codex/auth.json. Fallback: last token_count
 /// rate_limits snapshot in the newest rollout JSONL (local files, no network).
 final class CodexProvider: UsageProvider {
-    let info = ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "circle.hexagongrid")
+    let info = ProviderInfo(id: "codex", name: "Codex", tintHex: "#10A37F", symbol: "openai")
     let refresh: RefreshPolicy = .poll(.seconds(150))   // gentle: 2–5 min staggered band
     var watchPaths: [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -144,7 +144,7 @@ final class CodexProvider: UsageProvider {
     // MARK: - Rollout JSONL fallback
 
     /// Scan ~/.codex/sessions for the newest rollout file carrying a token_count
-    /// rate_limits snapshot, newest-first. ponytail: scans the tree tail first;
+    /// rate_limits snapshot, newest-first. Scans the tree tail first;
     /// switch to an mtime-sorted reverse walk if the tree grows huge.
     private func latestRolloutRateLimits() -> [String: Any]? {
         let root = fm.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")
