@@ -5,7 +5,7 @@ import Security
 /// Claude Code OAuth token from Keychain item "Claude Code-credentials".
 /// Fallback: ~/.claude.json → cachedUsageUtilization (refreshed by the CLI).
 final class ClaudeProvider: UsageProvider {
-    let info = ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "asterisk")
+    let info = ProviderInfo(id: "claude", name: "Claude", tintHex: "#D97757", symbol: "claude")
     let refresh: RefreshPolicy = .poll(.seconds(300))   // ≥ 5 min — endpoint 429s aggressively
     var watchPaths: [String] {
         [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json").path]

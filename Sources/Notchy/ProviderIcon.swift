@@ -23,7 +23,12 @@ struct ProviderIcon: View {
     private static func load(_ name: String) -> NSImage? {
         if let hit = cache[name] { return hit }
         guard let url = Bundle.module.url(forResource: name, withExtension: "svg"),
-              let image = NSImage(contentsOf: url) else { return nil }
+              let image = NSImage(contentsOf: url) else {
+            // A missing SVG renders as empty space, which hides the typo — fail
+            // loudly in debug instead.
+            assertionFailure("missing Resources/\(name).svg")
+            return nil
+        }
         image.size = CGSize(width: 64, height: 64)   // vector rep; scaled by .resizable()
         image.isTemplate = true
         cache[name] = image
