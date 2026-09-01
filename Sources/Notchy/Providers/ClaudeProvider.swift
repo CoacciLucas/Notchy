@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// Claude (Anthropic) — primary: GET api.anthropic.com/api/oauth/usage with the
 /// Claude Code OAuth token from Keychain item "Claude Code-credentials".
@@ -48,8 +47,8 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - Token handling
 
     /// Read the token the CLI maintains. Read-only — this app never writes the
-    /// Keychain item (a write from an unsigned binary rewrites its ACL and
-    /// makes the CLI prompt for the login password on every token read).
+    /// Keychain item (a write rewrites its ACL and makes the CLI prompt for the
+    /// login password on every token read).
     /// An expired token is still returned: the usage endpoint decides if it
     /// works, and a 401 falls back to one re-read (the CLI may have refreshed).
     private func token() throws -> (accessToken: String, expiresAt: Date?) {
@@ -65,15 +64,22 @@ final class ClaudeProvider: UsageProvider {
         return t
     }
 
+    /// Read via /usr/bin/security instead of SecItemCopyMatching: the Keychain
+    /// ACL authorizes the *calling process*, and the Apple-signed `security`
+    /// tool has a stable code identity that stays authorized forever. Calling
+    /// SecItem from this app makes the ACL depend on our own signature, which
+    /// macOS re-prompts for whenever it can't match it.
     private func readKeychainBlob() throws -> [String: Any] {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "Claude Code-credentials",
-            kSecReturnData as String: true,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data,
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        p.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0,
               let blob = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw HTTPError.unauthorized
         }
